@@ -36,6 +36,51 @@ interface ApiResponse {
   };
 }
 
+function Filters({
+  filters,
+  onFilterChange,
+}: {
+  filters: {
+    search: string;
+    sortBy: string;
+    sortOrder: "asc" | "desc";
+  };
+  onFilterChange: (key: keyof typeof filters, value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-4 mb-4">
+      <input
+        type="text"
+        placeholder="Search..."
+        value={filters.search}
+        onChange={(e) => onFilterChange("search", e.target.value)}
+        className="border border-gray-300 rounded px-3 py-2 text-sm"
+      />
+      <select
+        value={filters.sortBy}
+        onChange={(e) => onFilterChange("sortBy", e.target.value)}
+        className="border border-gray-300 rounded px-3 py-2 text-sm"
+      >
+        <option value="id">ID</option>
+        <option value="name">Name</option>
+        <option value="email">Email</option>
+        <option value="company">Company</option>
+        <option value="salary">Salary</option>
+        <option value="startDate">Start Date</option>
+        <option value="experience">Experience</option>
+      </select>
+      <select
+        value={filters.sortOrder}
+        onChange={(e) => onFilterChange("sortOrder", e.target.value)}
+        className="border border-gray-300 rounded px-3 py-2 text-sm"
+      >
+        <option value="asc">Ascending</option>
+        <option value="desc">Descending</option>
+      </select>
+    </div>
+  );
+}
+
 export default function Home() {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -45,20 +90,22 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("id");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [filters, setFilters] = useState({
+    search: "",
+    sortBy: "id",
+    sortOrder: "asc" as "asc" | "desc",
+  });
 
   const fetchItems = useCallback(
-    async (page: number, reset: boolean = false) => {
+    async (page: number, reset = false) => {
       try {
         setLoading(true);
         const query = new URLSearchParams({
           page: page.toString(),
           limit: "100",
-          search,
-          sortBy,
-          sortOrder,
+          search: filters.search,
+          sortBy: filters.sortBy,
+          sortOrder: filters.sortOrder,
         });
         const response = await fetch(`/api/items?${query}`);
         if (!response.ok) throw new Error("Failed to fetch items");
@@ -71,18 +118,14 @@ export default function Home() {
         setLoading(false);
       }
     },
-    [search, sortBy, sortOrder]
+    [filters]
   );
 
   useEffect(() => {
     setItems([]);
     setPage(1);
     fetchItems(1, true);
-  }, [search, sortBy, sortOrder, fetchItems]);
-
-  useEffect(() => {
-    fetchItems(page);
-  }, [page, fetchItems]);
+  }, [filters, fetchItems]);
 
   const rowVirtualizer = useVirtualizer({
     count: items.length,
@@ -100,6 +143,16 @@ export default function Home() {
       setPage((prev) => prev + 1);
     }
   }, [hasNext, loading, items.length, virtualItems]);
+
+  useEffect(() => {
+    if (page === 1) return;
+    fetchItems(page);
+  }, [page, fetchItems]);
+
+  const handleFilterChange = (key: keyof typeof filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setPage(1);
+  };
 
   if (error) {
     return (
@@ -179,37 +232,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Controls */}
-        <div className="flex flex-wrap gap-4 mb-4 text-gray-700">
-          <input
-            type="text"
-            placeholder="Search by name, email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-2 text-sm"
-          />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-2 text-sm"
-          >
-            <option value="id">ID</option>
-            <option value="name">Name</option>
-            <option value="email">Email</option>
-            <option value="company">Company</option>
-            <option value="salary">Salary</option>
-            <option value="startDate">Start Date</option>
-            <option value="experience">Experience</option>
-          </select>
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
-            className="border border-gray-300 rounded px-3 py-2 text-sm"
-          >
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-        </div>
+        {/* Filters */}
+        <Filters filters={filters} onFilterChange={handleFilterChange} />
 
         {/* Virtualized Table Implementation */}
         <div className="bg-white rounded-lg shadow">
