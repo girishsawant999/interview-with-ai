@@ -45,22 +45,40 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchItems = useCallback(async (page: number) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/items?page=${page}&limit=100`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch items");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const fetchItems = useCallback(
+    async (page: number, reset: boolean = false) => {
+      try {
+        setLoading(true);
+        const query = new URLSearchParams({
+          page: page.toString(),
+          limit: "100",
+          search,
+          sortBy,
+          sortOrder,
+        });
+        const response = await fetch(`/api/items?${query}`);
+        if (!response.ok) throw new Error("Failed to fetch items");
+        const data: ApiResponse = await response.json();
+        setItems((prev) => (reset ? data.data : [...prev, ...data.data]));
+        setHasNext(data.pagination.hasNext);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setLoading(false);
       }
-      const data: ApiResponse = await response.json();
-      setItems((prev) => [...prev, ...data.data]);
-      setHasNext(data.pagination.hasNext);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [search, sortBy, sortOrder]
+  );
+
+  useEffect(() => {
+    setItems([]);
+    setPage(1);
+    fetchItems(1, true);
+  }, [search, sortBy, sortOrder, fetchItems]);
 
   useEffect(() => {
     fetchItems(page);
@@ -159,6 +177,38 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex flex-wrap gap-4 mb-4 text-gray-700">
+          <input
+            type="text"
+            placeholder="Search by name, email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-2 text-sm"
+          />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-2 text-sm"
+          >
+            <option value="id">ID</option>
+            <option value="name">Name</option>
+            <option value="email">Email</option>
+            <option value="company">Company</option>
+            <option value="salary">Salary</option>
+            <option value="startDate">Start Date</option>
+            <option value="experience">Experience</option>
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+            className="border border-gray-300 rounded px-3 py-2 text-sm"
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
         </div>
 
         {/* Virtualized Table Implementation */}
