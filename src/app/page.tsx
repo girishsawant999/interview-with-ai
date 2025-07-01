@@ -120,6 +120,8 @@ export default function Home() {
     department: "",
     status: "",
   });
+  // Debounced search UI state
+  const [searchInput, setSearchInput] = useState("");
 
   const fetchItems = useCallback(
     async (page: number, reset = false) => {
@@ -154,6 +156,18 @@ export default function Home() {
     fetchItems(1, true);
   }, [filters, fetchItems]);
 
+  // Debounce effect for search input
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      // Only update filter if changed to avoid unnecessary re-renders
+      setFilters((prev) =>
+        prev.search !== searchInput ? { ...prev, search: searchInput } : prev
+      );
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
   const rowVirtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
@@ -177,8 +191,12 @@ export default function Home() {
   }, [page, fetchItems]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
+    if (key === "search") {
+      setSearchInput(value);
+    } else {
+      setFilters((prev) => ({ ...prev, [key]: value }));
+      setPage(1);
+    }
   };
 
   if (error) {
@@ -260,7 +278,10 @@ export default function Home() {
         </div>
 
         {/* Filters */}
-        <Filters filters={filters} onFilterChange={handleFilterChange} />
+        <Filters
+          filters={{ ...filters, search: searchInput }}
+          onFilterChange={handleFilterChange}
+        />
 
         {/* Virtualized Table Implementation */}
         <div className="bg-white rounded-lg shadow">
