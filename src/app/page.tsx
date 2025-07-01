@@ -44,6 +44,8 @@ function Filters({
     search: string;
     sortBy: string;
     sortOrder: "asc" | "desc";
+    department: string;
+    status: string;
   };
   onFilterChange: (key: keyof typeof filters, value: string) => void;
 }) {
@@ -77,6 +79,27 @@ function Filters({
         <option value="asc">Ascending</option>
         <option value="desc">Descending</option>
       </select>
+      <select
+        value={filters.department}
+        onChange={(e) => onFilterChange("department", e.target.value)}
+        className="border border-gray-300 rounded px-3 py-2 text-sm"
+      >
+        <option value="">All Departments</option>
+        <option value="Engineering">Engineering</option>
+        <option value="Sales">Sales</option>
+        <option value="Marketing">Marketing</option>
+        <option value="HR">HR</option>
+      </select>
+      <select
+        value={filters.status}
+        onChange={(e) => onFilterChange("status", e.target.value)}
+        className="border border-gray-300 rounded px-3 py-2 text-sm"
+      >
+        <option value="">All Statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="pending">Pending</option>
+      </select>
     </div>
   );
 }
@@ -94,6 +117,8 @@ export default function Home() {
     search: "",
     sortBy: "id",
     sortOrder: "asc" as "asc" | "desc",
+    department: "",
+    status: "",
   });
 
   const fetchItems = useCallback(
@@ -106,6 +131,8 @@ export default function Home() {
           search: filters.search,
           sortBy: filters.sortBy,
           sortOrder: filters.sortOrder,
+          department: filters.department,
+          status: filters.status,
         });
         const response = await fetch(`/api/items?${query}`);
         if (!response.ok) throw new Error("Failed to fetch items");
