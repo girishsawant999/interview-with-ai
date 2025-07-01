@@ -1,6 +1,7 @@
 "use client";
 
 import Filters from "@/components/Filters";
+import Loader from "@/components/Loader";
 import { fetchItems } from "@/lib/apiHandlers";
 import { Item } from "@/types";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -283,11 +284,12 @@ export default function Home() {
               </tbody>
             </table>
           </div>
-          {loading && (
-            <div className="p-4 text-center text-gray-600">
-              Loading more items...
+          {!loading && items.length === 0 && (
+            <div className="text-gray-500 p-4 text-center text-base">
+              No items to display.
             </div>
           )}
+          {loading && <Loader />}
         </div>
       </div>
     </div>
