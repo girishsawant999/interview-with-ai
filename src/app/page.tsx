@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Item {
   id: number;
@@ -36,41 +37,51 @@ interface ApiResponse {
 }
 
 export default function Home() {
+  const parentRef = useRef<HTMLDivElement>(null);
+
   const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Basic fetch without pagination, filtering, or sorting
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async (page: number) => {
     try {
       setLoading(true);
-      const response = await fetch("/api/items?limit=50");
+      const response = await fetch(`/api/items?page=${page}&limit=100`);
       if (!response.ok) {
         throw new Error("Failed to fetch items");
       }
       const data: ApiResponse = await response.json();
-      setItems(data.data);
+      setItems((prev) => [...prev, ...data.data]);
+      setHasNext(data.pagination.hasNext);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchItems();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading items...</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    fetchItems(page);
+  }, [page, fetchItems]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 50,
+    overscan: 5,
+  });
+
+  const virtualItems = rowVirtualizer.getVirtualItems();
+
+  useEffect(() => {
+    const [lastItem] = [...virtualItems].reverse();
+    if (!lastItem) return;
+    if (lastItem.index >= items.length - 1 && hasNext && !loading) {
+      setPage((prev) => prev + 1);
+    }
+  }, [hasNext, loading, items.length, virtualItems]);
 
   if (error) {
     return (
@@ -78,7 +89,10 @@ export default function Home() {
         <div className="text-center">
           <div className="text-red-600 text-xl mb-4">Error: {error}</div>
           <button
-            onClick={fetchItems}
+            onClick={() => {
+              setError(null);
+              fetchItems(page);
+            }}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Retry
@@ -147,21 +161,24 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Current Basic Implementation */}
+        {/* Virtualized Table Implementation */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">
-              Current Implementation (Basic - Replace with Your Solution)
+              Virtualized Table (Paginated + Prefetching)
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              Showing first 50 items only. Your task: make it handle all 10,000
-              efficiently!
+              Loaded {items.length} items. New pages are fetched as you scroll.
             </p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div
+            ref={parentRef}
+            className="overflow-auto"
+            style={{ maxHeight: "600px", position: "relative" }}
+          >
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ID
@@ -189,48 +206,71 @@ export default function Home() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {items.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {item.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {item.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.company}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.department}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.position}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ${item.salary.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          item.status === "active"
-                            ? "bg-green-100 text-green-800"
-                            : item.status === "inactive"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+              <tbody
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  position: "relative",
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const item = items[virtualRow.index];
+                  return (
+                    <tr
+                      key={item.id}
+                      ref={(el) => rowVirtualizer.measureElement(el)}
+                      style={{
+                        position: "absolute",
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: "flex",
+                        width: "100%",
+                      }}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-[10%]">
+                        {item.id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 w-[15%]">
+                        {item.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 w-[20%]">
+                        {item.email}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-[15%]">
+                        {item.company}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-[10%]">
+                        {item.department}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-[10%]">
+                        {item.position}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-[10%]">
+                        ${item.salary.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap w-[10%]">
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            item.status === "active"
+                              ? "bg-green-100 text-green-800"
+                              : item.status === "inactive"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {loading && (
+            <div className="p-4 text-center text-gray-600">
+              Loading more items...
+            </div>
+          )}
         </div>
       </div>
     </div>
